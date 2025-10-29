@@ -7,12 +7,16 @@ const app = express(); // ✅ You must initialize app first!
 app.use(
   cors({
     origin: [
+      "https://share-my-ride-git-main-abhays-projects-cdb9056e.vercel.app",
       "https://share-my-ride-neon.vercel.app"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
   })
 );
+app.use(cors());
+
+
 
 
 console.log('🔐 JWT_SECRET loaded:', process.env.JWT_SECRET ? 'YES ✅' : 'NO ❌');
