@@ -4,14 +4,15 @@ import axios from 'axios';
 const getApiUrl = () => {
   // For Vite
   if (typeof import.meta !== 'undefined' && import.meta.env) {
-    return import.meta.env.VITE_API_URL || 'https://share-my-ride-backend-aioz8wnlr-abhays-projects-cdb9056e.vercel.app/';
+    return import.meta.env.VITE_API_URL || 'https://share-my-ride-backend-aioz8wnlr-abhays-projects-cdb9056e.vercel.app/api/';
   }
   // For Create React App
   if (typeof process !== 'undefined' && process.env) {
-    return process.env.REACT_APP_API_URL || 'https://share-my-ride-backend-aioz8wnlr-abhays-projects-cdb9056e.vercel.app/';
+    return process.env.REACT_APP_API_URL || 'https://share-my-ride-backend-aioz8wnlr-abhays-projects-cdb9056e.vercel.app/api/';
   }
-  // Fallback
-  return 'https://share-my-ride-backend-aioz8wnlr-abhays-projects-cdb9056e.vercel.app/';
+  return import.meta.env.VITE_API_URL || 
+       'https://share-my-ride-backend-aioz8wnlr-abhays-projects-cdb9056e.vercel.app/api';
+
 };
 
 const API_BASE_URL = getApiUrl();
