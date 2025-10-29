@@ -1,20 +1,25 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
-require('dotenv').config();
+const cors = require("cors");
 
-const app = express();
+const app = express(); // ✅ You must initialize app first!
 
+app.use(
+  cors({
+    origin: [
+      "https://share-my-ride-backend-aioz8wnlr-abhays-projects-cdb9056e.vercel.app/",
+      "https://share-my-ride.vercel.app",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    credentials: true,
+  })
+);
 
-// Add this to verify it's loaded
 console.log('🔐 JWT_SECRET loaded:', process.env.JWT_SECRET ? 'YES ✅' : 'NO ❌');
 
-// Middleware
-app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
-// MongoDB Connection
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -22,7 +27,6 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(() => console.log('✅ MongoDB Connected'))
 .catch((err) => console.error('❌ MongoDB Connection Error:', err));
 
-// Import Routes (ALL IMPORTS AT TOP)
 const authRoutes = require('./routes/authRoutes');
 const rideRoutes = require('./routes/rideRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -30,9 +34,8 @@ const bookingRoutes = require('./routes/bookingRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const payoutRoutes = require('./routes/payoutRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
-const receiptRoutes = require('./routes/receipts'); // ✅ ADD THIS
+const receiptRoutes = require('./routes/receipts');
 
-// Register Routes (BEFORE 404 HANDLER!)
 app.use('/api/auth', authRoutes);
 app.use('/api/rides', rideRoutes);
 app.use('/api/users', userRoutes);
@@ -40,9 +43,8 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/payouts', payoutRoutes);
 app.use('/api/webhooks', webhookRoutes);
-app.use('/api/receipts', receiptRoutes); // ✅ ADD THIS
+app.use('/api/receipts', receiptRoutes);
 
-// Health check endpoint
 app.get('/', (req, res) => {
   res.json({ 
     message: 'RideShare API is running',
@@ -55,20 +57,18 @@ app.get('/', (req, res) => {
       payments: '/api/payments',
       payouts: '/api/payouts',
       webhooks: '/api/webhooks',
-      receipts: '/api/receipts' // ✅ ADD THIS
+      receipts: '/api/receipts'
     }
   });
 });
 
-// 404 handler (MUST BE AFTER ALL ROUTES!)
-app.use((req, res, next) => {
+app.use((req, res) => {
   res.status(404).json({ 
     message: 'Route not found',
     requestedUrl: req.originalUrl 
   });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server Error:', err.stack);
   res.status(500).json({ 
