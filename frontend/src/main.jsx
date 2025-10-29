@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-// import * as webVitals from 'web-vitals';
 
 
 
@@ -107,31 +106,3 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
-
-// Service Worker Registration (Optional - for PWA)
-if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/service-worker.js')
-      .then((registration) => {
-        console.log('ServiceWorker registered:', registration);
-      })
-      .catch((error) => {
-        console.log('ServiceWorker registration failed:', error);
-      });
-  });
-}
-// Performance Monitoring (Optional)
-// if (process.env.NODE_ENV === 'production') {
-//   const reportWebVitals = (onPerfEntry) => {
-//     if (onPerfEntry && onPerfEntry instanceof Function) {
-//       webVitals.getCLS(onPerfEntry);
-//       webVitals.getFID(onPerfEntry);
-//       webVitals.getFCP(onPerfEntry);
-//       webVitals.getLCP(onPerfEntry);
-//       webVitals.getTTFB(onPerfEntry);
-//     }
-//   };
-
-//   reportWebVitals(console.log);
-// }
