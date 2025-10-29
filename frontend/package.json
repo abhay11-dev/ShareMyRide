@@ -8,21 +8,20 @@
   
   "type": "module",
   
-  "scripts": {
   
     
-  "dev": "vite",
+  
   
     
+  
+    "scripts": {
   "build": "vite build",
+  "preview": "vite preview",
+  "start": "vite"
+}
+
   
-    
-  "lint": "eslint .",
-  
-    
-  "preview": "vite preview"
-  
-  },
+  ,
   
   "dependencies": {
   
@@ -104,4 +103,6 @@
   "proxy": "http://localhost:5000"
   
   }
+
+
 }
