@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-import * as webVitals from 'web-vitals';
+// import * as webVitals from 'web-vitals';
 
 
 
@@ -122,16 +122,16 @@ if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
   });
 }
 // Performance Monitoring (Optional)
-if (process.env.NODE_ENV === 'production') {
-  const reportWebVitals = (onPerfEntry) => {
-    if (onPerfEntry && onPerfEntry instanceof Function) {
-      webVitals.getCLS(onPerfEntry);
-      webVitals.getFID(onPerfEntry);
-      webVitals.getFCP(onPerfEntry);
-      webVitals.getLCP(onPerfEntry);
-      webVitals.getTTFB(onPerfEntry);
-    }
-  };
+// if (process.env.NODE_ENV === 'production') {
+//   const reportWebVitals = (onPerfEntry) => {
+//     if (onPerfEntry && onPerfEntry instanceof Function) {
+//       webVitals.getCLS(onPerfEntry);
+//       webVitals.getFID(onPerfEntry);
+//       webVitals.getFCP(onPerfEntry);
+//       webVitals.getLCP(onPerfEntry);
+//       webVitals.getTTFB(onPerfEntry);
+//     }
+//   };
 
-  reportWebVitals(console.log);
-}
+//   reportWebVitals(console.log);
+// }
