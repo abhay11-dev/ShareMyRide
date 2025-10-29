@@ -7,14 +7,15 @@ const app = express(); // ✅ You must initialize app first!
 app.use(
   cors({
     origin: [
+      "https://share-my-ride-neon.vercel.app",
       "https://share-my-ride-git-main-abhays-projects-cdb9056e.vercel.app",
-      "https://share-my-ride-neon.vercel.app"
+      "http://localhost:5173"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
   })
 );
-app.use(cors());
+
 
 
 
