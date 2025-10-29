@@ -7,7 +7,7 @@ const app = express(); // ✅ You must initialize app first!
 app.use(
   cors({
     origin: [
-      "https://share-my-ride-backend-aioz8wnlr-abhays-projects-cdb9056e.vercel.app/",
+      "https://share-my-ride-backend.vercel.app/",
       "https://share-my-ride.vercel.app",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
