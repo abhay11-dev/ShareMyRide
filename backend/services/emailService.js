@@ -9,6 +9,192 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// Test transporter connection
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ Email transporter error:', error.message);
+  } else {
+    console.log('✅ Email service ready');
+  }
+});
+
+/**
+ * Send email verification OTP for signup
+ */
+exports.sendSignupVerificationEmail = async (email, name, otp) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: '🔐 Verify Your Email - ShareMyRide',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+          .header { background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .box { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+          .otp-code { font-size: 32px; font-weight: bold; color: #10B981; letter-spacing: 5px; margin: 20px 0; font-family: monospace; }
+          .warning { color: #ef4444; font-size: 12px; margin-top: 15px; }
+          .footer { text-align: center; color: #6b7280; margin-top: 30px; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>🎉 Welcome to ShareMyRide!</h1>
+        </div>
+        
+        <div class="content">
+          <h2>Hi ${name},</h2>
+          <p>Thank you for signing up! To complete your registration, please verify your email address using the code below:</p>
+          
+          <div class="box">
+            <p>Your verification code is:</p>
+            <div class="otp-code">${otp}</div>
+            <p class="warning">⏰ This code will expire in 15 minutes</p>
+          </div>
+          
+          <p>If you didn't create this account, please ignore this email.</p>
+          
+          <div class="footer">
+            <p>🚗 ShareMyRide - Your Trusted Ride Sharing Platform</p>
+            <p>© 2026 ShareMyRide. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Signup verification email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Error sending signup verification email:', error.message);
+    throw error;
+  }
+};
+
+/**
+ * Send password reset OTP
+ */
+exports.sendPasswordResetEmail = async (email, name, otp) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: '🔑 Password Reset Request - ShareMyRide',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+          .header { background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .box { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+          .otp-code { font-size: 32px; font-weight: bold; color: #3B82F6; letter-spacing: 5px; margin: 20px 0; font-family: monospace; }
+          .warning { color: #ef4444; font-size: 12px; margin-top: 15px; }
+          .footer { text-align: center; color: #6b7280; margin-top: 30px; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>🔐 Password Reset Request</h1>
+        </div>
+        
+        <div class="content">
+          <h2>Hi ${name},</h2>
+          <p>We received a request to reset your password. Use the code below to proceed:</p>
+          
+          <div class="box">
+            <p>Your password reset code is:</p>
+            <div class="otp-code">${otp}</div>
+            <p class="warning">⏰ This code will expire in 15 minutes</p>
+          </div>
+          
+          <p>If you didn't request this, please ignore this email and your password will remain unchanged.</p>
+          
+          <div class="footer">
+            <p>🚗 ShareMyRide - Your Trusted Ride Sharing Platform</p>
+            <p>© 2026 ShareMyRide. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Password reset email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Error sending password reset email:', error.message);
+    throw error;
+  }
+};
+
+/**
+ * Send 2FA OTP for login
+ */
+exports.send2FAEmail = async (email, name, otp) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: '🔐 Your 2FA Code - ShareMyRide',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+          .header { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .box { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+          .otp-code { font-size: 32px; font-weight: bold; color: #F59E0B; letter-spacing: 5px; margin: 20px 0; font-family: monospace; }
+          .warning { color: #ef4444; font-size: 12px; margin-top: 15px; }
+          .footer { text-align: center; color: #6b7280; margin-top: 30px; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>🔐 Two-Factor Authentication</h1>
+        </div>
+        
+        <div class="content">
+          <h2>Hi ${name},</h2>
+          <p>Your login is being authenticated. Enter the code below to continue:</p>
+          
+          <div class="box">
+            <p>Your 2FA code is:</p>
+            <div class="otp-code">${otp}</div>
+            <p class="warning">⏰ This code will expire in 15 minutes</p>
+          </div>
+          
+          <p>If you didn't attempt to log in, please ignore this email.</p>
+          
+          <div class="footer">
+            <p>🚗 ShareMyRide - Your Trusted Ride Sharing Platform</p>
+            <p>© 2026 ShareMyRide. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ 2FA email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Error sending 2FA email:', error.message);
+    throw error;
+  }
+};
+
 /**
  * Send payment receipt to passenger
  */

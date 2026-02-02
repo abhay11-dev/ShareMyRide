@@ -44,8 +44,18 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  verificationToken: String,
+  verificationTokenExpire: Date,
   resetPasswordToken: String,
   resetPasswordExpire: Date,
+  resetOTP: String,
+  resetOTPExpire: Date,
+  twoFAEnabled: {
+    type: Boolean,
+    default: false
+  },
+  twoFAOTP: String,
+  twoFAOTPExpire: Date,
   createdAt: {
     type: Date,
     default: Date.now
@@ -93,6 +103,12 @@ userSchema.methods.toJSON = function() {
   delete user.password;
   delete user.resetPasswordToken;
   delete user.resetPasswordExpire;
+  delete user.resetOTP;
+  delete user.resetOTPExpire;
+  delete user.verificationToken;
+  delete user.verificationTokenExpire;
+  delete user.twoFAOTP;
+  delete user.twoFAOTPExpire;
   delete user.__v;
   return user;
 };
