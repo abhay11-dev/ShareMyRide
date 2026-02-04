@@ -62,7 +62,8 @@ function Signup() {
       const result = await signupUser({
         name: formData.name,
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        confirmPassword: formData.confirmPassword
       });
 
       success(`📧 Verification email sent to ${formData.email}`);
@@ -103,9 +104,10 @@ function Signup() {
         navigate('/login');
       }, 2000);
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Verification failed';
+      const errorMsg = err.response?.data?.message || err.message || 'OTP invalid, please retry';
       showError(errorMsg);
       setError(errorMsg);
+      setOtp('');
     } finally {
       setLoading(false);
     }
@@ -238,8 +240,13 @@ function Signup() {
               {resendTimer > 0 ? (
                 <p className="text-gray-600 text-xs sm:text-sm">Resend code in <span className="font-semibold text-green-600">{resendTimer}s</span></p>
               ) : (
-                <button type="button" onClick={handleResendOTP} disabled={loading} className="text-green-600 hover:text-green-700 font-semibold text-xs sm:text-sm">
-                  Didn't receive the code? Resend
+                <button 
+                  type="button" 
+                  onClick={handleResendOTP} 
+                  disabled={loading} 
+                  className="inline-block px-4 py-2 text-green-600 hover:text-green-700 hover:bg-green-50 font-semibold text-xs sm:text-sm rounded-lg transition-colors"
+                >
+                  📧 Didn't receive the code? Resend
                 </button>
               )}
             </div>

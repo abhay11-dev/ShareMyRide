@@ -5,7 +5,7 @@ const router = express.Router();
 const {
   signup,
   verifyEmail,
-  resendOTP,
+  resendVerificationEmail,
   login,
   verify2FA,
   forgotPassword,
@@ -19,7 +19,7 @@ const { protect } = require('../middleware/auth');
 // Public Routes
 router.post('/signup', signup);
 router.post('/verify-email', verifyEmail);
-router.post('/resend-otp', resendOTP);
+router.post('/resend-verification', resendVerificationEmail);
 router.post('/login', login);
 router.post('/verify-2fa', verify2FA);
 router.post('/forgot-password', forgotPassword);

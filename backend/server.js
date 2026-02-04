@@ -9,7 +9,8 @@ app.use(cors({
   origin: [
     "https://share-my-ride-git-main-abhays-projects-cdb9056e.vercel.app",
     "https://share-my-ride.vercel.app", // (optional future production)
-    "http://localhost:5173" // for local testing
+    "http://localhost:5173", // for local testing (Vite default)
+    "http://localhost:5174"  // for local testing (alternative Vite port)
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true

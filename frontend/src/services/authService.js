@@ -16,8 +16,9 @@ export const signupUser = async (userData) => {
  * @param {string} otp
  * @returns {Promise<Object>} - {success, message}
  */
-export const verifyEmail = async (email, otp) => {
-  const response = await api.post('/auth/verify-email', { email, otp });
+export const verifyEmail = async (email, token) => {
+  // backend expects { email, token }
+  const response = await api.post('/auth/verify-email', { email, token });
   return response.data;
 };
 
@@ -27,7 +28,8 @@ export const verifyEmail = async (email, otp) => {
  * @returns {Promise<Object>} - {success, message}
  */
 export const resendOTP = async (email) => {
-  const response = await api.post('/auth/resend-otp', { email });
+  // endpoint renamed to resend-verification on backend
+  const response = await api.post('/auth/resend-verification', { email });
   return response.data;
 };
 

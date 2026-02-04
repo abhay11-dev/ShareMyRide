@@ -59,9 +59,18 @@ function Login() {
       const result = await verify2FA(userId, otp);
       
       if (result.token && result.user) {
-        success('✅ Login successful!');
-        login(result);
-        navigate('/');
+        // Store in localStorage instead of calling login function
+        localStorage.setItem('token', result.token);
+        localStorage.setItem('user', JSON.stringify(result.user));
+        
+        // Show welcome message with username
+        const username = result.user.name || result.user.email;
+        success(`👋 Welcome ${username}!`);
+        
+        // Navigate to home/dashboard
+        setTimeout(() => {
+          navigate('/');
+        }, 1500);
       }
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.message || 'Verification failed';

@@ -40,22 +40,57 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  isVerified: {
+  // ========== EMAIL VERIFICATION ==========
+  emailVerified: {
     type: Boolean,
     default: false
   },
-  verificationToken: String,
-  verificationTokenExpire: Date,
-  resetPasswordToken: String,
-  resetPasswordExpire: Date,
-  resetOTP: String,
-  resetOTPExpire: Date,
+  emailVerificationToken: String,    // Hashed token
+  emailVerificationExpire: Date,
+  
+  // ========== PASSWORD RESET ==========
+  passwordResetToken: String,        // Hashed token
+  passwordResetExpire: Date,
+  
+  // ========== 2FA SETUP ==========
   twoFAEnabled: {
     type: Boolean,
     default: false
   },
-  twoFAOTP: String,
+  twoFASecret: String,               // For TOTP (future: authenticator app)
+  
+  // ========== 2FA LOGIN FLOW ==========
+  twoFAOTP: String,                  // Hashed OTP
   twoFAOTPExpire: Date,
+  twoFAAttempts: {
+    type: Number,
+    default: 0
+  },
+  twoFALocked: {
+    type: Boolean,
+    default: false
+  },
+  twoFALockedUntil: Date,
+  
+  // ========== LOGIN SECURITY ==========
+  loginAttempts: {
+    type: Number,
+    default: 0
+  },
+  loginLocked: {
+    type: Boolean,
+    default: false
+  },
+  loginLockedUntil: Date,
+  lastLoginAt: Date,
+  
+  // ========== ACCOUNT STATUS ==========
+  accountStatus: {
+    type: String,
+    enum: ['PENDING_EMAIL_VERIFICATION', 'ACTIVE', 'LOCKED', 'SUSPENDED'],
+    default: 'PENDING_EMAIL_VERIFICATION'
+  },
+  
   createdAt: {
     type: Date,
     default: Date.now
@@ -101,14 +136,13 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 userSchema.methods.toJSON = function() {
   const user = this.toObject();
   delete user.password;
-  delete user.resetPasswordToken;
-  delete user.resetPasswordExpire;
-  delete user.resetOTP;
-  delete user.resetOTPExpire;
-  delete user.verificationToken;
-  delete user.verificationTokenExpire;
+  delete user.passwordResetToken;
+  delete user.passwordResetExpire;
+  delete user.emailVerificationToken;
+  delete user.emailVerificationExpire;
   delete user.twoFAOTP;
   delete user.twoFAOTPExpire;
+  delete user.twoFASecret;
   delete user.__v;
   return user;
 };
