@@ -4,6 +4,7 @@ import AppRoutes from './routes/AppRoutes';
 import Header from './components/common/Header';
 import Footer from './components/common/Footer';
 import { UserProvider } from './contexts/UserContext';
+import Toast from './components/Toast';
 
 function App() {
   return (
@@ -20,6 +21,9 @@ function App() {
           
           {/* Footer */}
           <Footer />
+
+          {/* Toasts */}
+          <Toast />
           
           {/* Scroll to Top Button */}
           <ScrollToTop />

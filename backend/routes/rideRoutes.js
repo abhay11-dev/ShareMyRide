@@ -12,11 +12,12 @@ const {
 // ✅ Import the 'protect' function specifically
 const { protect } = require('../middleware/auth');
 
-// POST /api/rides - Create a new ride
-router.post('/', protect, postRide);
+// POST /api/rides - Create a new ride (requires auth + Aadhar verified)
+const { requireAadharVerified } = require('../middleware/requireAadharVerified');
+router.post('/', protect, requireAadharVerified, postRide);
 
-// GET /api/rides/search?start=A&end=B - Search rides
-router.get('/search', searchRides);
+// GET /api/rides/search?start=A&end=B - Search rides (require Aadhar for full results)
+router.get('/search', protect, requireAadharVerified, searchRides);
 
 // GET /api/rides/my - Get my rides (MUST come before /:id)
 router.get('/my', protect, getMyRides);

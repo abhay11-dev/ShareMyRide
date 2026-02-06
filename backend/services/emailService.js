@@ -1,32 +1,119 @@
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
-// Create transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
+// If EmailJS is configured (service + template + user), prefer EmailJS REST API.
+const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID;
+const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID;
+const EMAILJS_USER_ID = process.env.EMAILJS_USER_ID;
+
+// Initialize SendGrid if available
+if (!process.env.SENDGRID_API_KEY) {
+  console.warn('⚠️ SENDGRID_API_KEY not configured in .env — SendGrid fallback disabled');
+} else {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log('✅ SendGrid initialized successfully');
+}
+
+// Helper function to send email via SendGrid (fallback)
+const sendViaSendGrid = async (to, subject, html) => {
+  try {
+    const msg = {
+      to,
+      from: process.env.EMAIL_USER,
+      subject,
+      html
+    };
+    await sgMail.send(msg);
+    return true;
+  } catch (error) {
+    console.error('❌ SendGrid error:', error.message || error);
+    throw error;
   }
-});
+};
 
-// Test transporter connection
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ Email transporter error:', error.message);
-  } else {
+// Helper function to send email via EmailJS REST API
+const sendViaEmailJS = async (to, subject, html) => {
+  if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_USER_ID) {
+    throw new Error('EmailJS not configured');
+  }
+
+  const payload = {
+    service_id: EMAILJS_SERVICE_ID,
+    template_id: EMAILJS_TEMPLATE_ID,
+    user_id: EMAILJS_USER_ID,
+    template_params: {
+      to_email: to,
+      subject,
+      message_html: html
+    }
+  };
+
+  // Prefer global fetch (Node 18+). Try to require node-fetch if global fetch is missing.
+  let fetchFn = (typeof fetch !== 'undefined') ? fetch : null;
+  if (!fetchFn) {
+    try {
+      // node-fetch v2 supports require()
+      // If not installed, the require will fail and we'll fall back to SendGrid
+      // (the caller handles fallback when sendViaEmailJS throws).
+      // eslint-disable-next-line global-require
+      fetchFn = require('node-fetch');
+      console.log('✅ Using node-fetch for EmailJS API calls');
+    } catch (err) {
+      console.warn('⚠️ node-fetch not installed and global fetch unavailable. EmailJS REST will not be used.');
+      throw new Error('fetch not available');
+    }
+  }
+
+  const res = await fetchFn('https://api.emailjs.com/api/v1.0/email/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    const msg = `EmailJS error: ${res.status} ${res.statusText} - ${txt}`;
+    console.error(msg);
+    throw new Error(msg);
+  }
+
+  return true;
+};
+
+// Primary sendEmail helper: prefer EmailJS if configured, otherwise SendGrid
+const sendEmail = async (to, subject, html) => {
+  if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_USER_ID) {
+    try {
+      return await sendViaEmailJS(to, subject, html);
+    } catch (err) {
+      console.error('⚠️ EmailJS send failed, falling back to SendGrid:', err.message);
+    }
+  }
+
+  // Fallback to SendGrid
+  return await sendViaSendGrid(to, subject, html);
+};
+
+// Test SendGrid connection on startup
+(async () => {
+  try {
+    // SendGrid doesn't have a direct verify method, so we log that it's ready
     console.log('✅ Email service ready');
+  } catch (error) {
+    console.error('❌ Email service error:', error.message);
   }
-});
+})();
 
 /**
  * Send email verification OTP for signup
  */
 exports.sendSignupVerificationEmail = async (email, name, otp) => {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: '🔐 Verify Your Email - ShareMyRide',
-    html: `
+  // Dev mode: log OTP instead of sending
+  if (process.env.NODE_ENV === 'development' && process.env.EMAIL_DEBUG === 'true') {
+    console.log(`📧 [DEV MODE] Verification email would be sent to: ${email}`);
+    console.log(`📧 [DEV MODE] OTP: ${otp}`);
+    return true;
+  }
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -64,15 +151,19 @@ exports.sendSignupVerificationEmail = async (email, name, otp) => {
         </div>
       </body>
       </html>
-    `
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendEmail(email, '🔐 Verify Your Email - ShareMyRide', html);
     console.log(`✅ Signup verification email sent to ${email}`);
     return true;
   } catch (error) {
     console.error('❌ Error sending signup verification email:', error.message);
+    // In development, continue so user can test the flow
+    if (process.env.NODE_ENV === 'development') {
+      console.log('ℹ️ [DEV] Continuing signup despite email service error');
+      return true;
+    }
     throw error;
   }
 };
@@ -81,11 +172,7 @@ exports.sendSignupVerificationEmail = async (email, name, otp) => {
  * Send password reset OTP
  */
 exports.sendPasswordResetEmail = async (email, name, otp) => {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: '🔑 Password Reset Request - ShareMyRide',
-    html: `
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -123,11 +210,10 @@ exports.sendPasswordResetEmail = async (email, name, otp) => {
         </div>
       </body>
       </html>
-    `
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendEmail(email, '🔑 Password Reset Request - ShareMyRide', html);
     console.log(`✅ Password reset email sent to ${email}`);
     return true;
   } catch (error) {
@@ -140,11 +226,7 @@ exports.sendPasswordResetEmail = async (email, name, otp) => {
  * Send 2FA OTP for login
  */
 exports.send2FAEmail = async (email, name, otp) => {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: '🔐 Your 2FA Code - ShareMyRide',
-    html: `
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -182,11 +264,10 @@ exports.send2FAEmail = async (email, name, otp) => {
         </div>
       </body>
       </html>
-    `
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendEmail(email, '🔐 Your 2FA Code - ShareMyRide', html);
     console.log(`✅ 2FA email sent to ${email}`);
     return true;
   } catch (error) {
@@ -199,11 +280,7 @@ exports.send2FAEmail = async (email, name, otp) => {
  * Send payment receipt to passenger
  */
 exports.sendPaymentReceipt = async (transaction, booking, passenger, driver) => {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: passenger.email,
-    subject: '✅ Payment Receipt - RideShare',
-    html: `
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -326,11 +403,10 @@ exports.sendPaymentReceipt = async (transaction, booking, passenger, driver) => 
         </div>
       </body>
       </html>
-    `
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendEmail(passenger.email, '✅ Payment Receipt - RideShare', html);
     console.log('✅ Receipt email sent to passenger:', passenger.email);
     return true;
   } catch (error) {
@@ -343,11 +419,7 @@ exports.sendPaymentReceipt = async (transaction, booking, passenger, driver) => 
  * Send payment notification to driver
  */
 exports.sendDriverPaymentNotification = async (transaction, booking, passenger, driver) => {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: driver.email,
-    subject: '💰 Payment Received - RideShare',
-    html: `
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -456,11 +528,10 @@ exports.sendDriverPaymentNotification = async (transaction, booking, passenger, 
         </div>
       </body>
       </html>
-    `
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendEmail(driver.email, '💰 Payment Received - RideShare', html);
     console.log('✅ Payment notification sent to driver:', driver.email);
     return true;
   } catch (error) {
@@ -475,11 +546,7 @@ exports.sendDriverPaymentNotification = async (transaction, booking, passenger, 
 exports.sendRideReminder = async (booking, user, userType) => {
   const isDriver = userType === 'driver';
   
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: user.email,
-    subject: `🔔 Ride Reminder - Tomorrow at ${booking.rideId.time}`,
-    html: `
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -533,11 +600,10 @@ exports.sendRideReminder = async (booking, user, userType) => {
         </div>
       </body>
       </html>
-    `
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendEmail(user.email, `🔔 Ride Reminder - Tomorrow at ${booking.rideId.time}`, html);
     console.log(`✅ Ride reminder sent to ${userType}:`, user.email);
     return true;
   } catch (error) {

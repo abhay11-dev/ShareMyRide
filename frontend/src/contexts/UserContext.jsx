@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
-import { loginUser as loginAPI, signupUser as signupAPI } from '../services/authService';
+import { loginUser as loginAPI, signupUser as signupAPI, getProfile as getProfileAPI } from '../services/authService';
 
 export const UserContext = createContext();
 
@@ -15,13 +15,28 @@ export const UserProvider = ({ children }) => {
         const storedToken = localStorage.getItem('token');
         
         if (storedUser && storedToken) {
-          const parsedUser = JSON.parse(storedUser);
-          
-          if (parsedUser && (parsedUser.id || parsedUser._id) && parsedUser.email) {
-            setUser(parsedUser);
-            console.log('✅ User session restored');
-          } else {
-            console.warn('⚠️ Invalid user data in localStorage');
+          // Prefer fresh profile from server when token exists
+          try {
+            getProfileAPI().then((res) => {
+              if (res && res.user) {
+                setUser(res.user);
+                console.log('✅ User session refreshed from API');
+              } else {
+                const parsedUser = JSON.parse(storedUser);
+                setUser(parsedUser);
+                console.log('✅ User session restored from localStorage');
+              }
+            }).catch((err) => {
+              console.warn('⚠️ Could not refresh profile, falling back to local user');
+              try {
+                const parsedUser = JSON.parse(storedUser);
+                setUser(parsedUser);
+              } catch (e) {
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
+              }
+            });
+          } catch (e) {
             localStorage.removeItem('user');
             localStorage.removeItem('token');
           }
@@ -36,7 +51,26 @@ export const UserProvider = ({ children }) => {
       }
     };
 
+    // Listen for login event from Login component
+    const handleUserLoggedIn = () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+          console.log('✅ User context updated after login');
+        } catch (error) {
+          console.error('❌ Failed to update user context:', error);
+        }
+      }
+    };
+
     initializeAuth();
+    window.addEventListener('userLoggedIn', handleUserLoggedIn);
+
+    return () => {
+      window.removeEventListener('userLoggedIn', handleUserLoggedIn);
+    };
   }, []);
 
   const login = useCallback(async (credentials) => {

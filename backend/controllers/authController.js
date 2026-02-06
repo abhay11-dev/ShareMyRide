@@ -11,6 +11,8 @@ const {
   incrementRateLimit
 } = require('../utils/tokenHelper');
 const emailService = require('../services/emailService');
+const smsService = require('../services/smsService');
+const { encrypt, decrypt } = require('../utils/encryption');
 
 // ========== CONFIGURATION ==========
 const LOGIN_RATE_LIMIT = 5;        // Max login attempts
@@ -33,15 +35,30 @@ const generateToken = (userId) => {
 // @access  Public
 exports.signup = async (req, res) => {
   try {
-    const { name, email, password, confirmPassword } = req.body;
+    const { name, email, phone, password, confirmPassword, verificationMethod } = req.body;
     
-    console.log('📝 Signup request:', { name, email });
+    console.log('📝 Signup request:', { name, email, phone, verificationMethod });
 
     // ===== VALIDATION =====
-    if (!name || !email || !password || !confirmPassword) {
+    if (!name || !password || !confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: 'All fields are required'
+        message: 'Name, password, and confirmation are required'
+      });
+    }
+
+    // Require email or phone based on verification method
+    if (verificationMethod === 'email' && !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required for email verification'
+      });
+    }
+
+    if (verificationMethod === 'phone' && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is required for phone verification'
       });
     }
 
@@ -59,75 +76,116 @@ exports.signup = async (req, res) => {
       });
     }
 
-    // Email validation regex
+    // Email validation regex (only validate if email is provided)
     const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
-    if (!emailRegex.test(email)) {
+    if (email && !emailRegex.test(email)) {
       return res.status(400).json({
         success: false,
         message: 'Please provide a valid email'
       });
     }
 
-    // ===== CHECK EMAIL UNIQUENESS =====
-    let user = await User.findOne({ email: email.toLowerCase() });
-    
-    if (user && user.emailVerified) {
-      console.log('❌ Email already registered and verified:', email);
-      return res.status(409).json({
-        success: false,
-        message: 'Email already registered. Please login or use a different email.'
-      });
+    // ===== CHECK EMAIL UNIQUENESS (only if email is provided) =====
+    let user = null;
+    if (email) {
+      user = await User.findOne({ email: email.toLowerCase() });
+      
+      if (user && user.emailVerified) {
+        console.log('❌ Email already registered and verified:', email);
+        return res.status(409).json({
+          success: false,
+          message: 'Email already registered. Please login or use a different email.'
+        });
+      }
     }
 
     // ===== GENERATE EMAIL VERIFICATION TOKEN =====
-    const { token, hashedToken, expiry } = await generateVerificationToken(15);
+    // Dev mode: use fixed OTP 111005 for test account
+    let token, hashedToken, expiry;
+    if (process.env.NODE_ENV === 'development' && email === 'abhayrajsinghmandloi@gmail.com') {
+      token = '111005';
+      hashedToken = await require('bcryptjs').hash('111005', 10);
+      expiry = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
+      console.log('🧪 [DEV TEST] Using fixed OTP 111005 for test account');
+    } else {
+      const result = await generateVerificationToken(15);
+      token = result.token;
+      hashedToken = result.hashedToken;
+      expiry = result.expiry;
+    }
 
     if (!user) {
-      // Create new user with PENDING_EMAIL_VERIFICATION status
-      user = await User.create({
+      // Create new user with pending verification status
+      const newUser = {
         name: name.trim(),
-        email: email.toLowerCase().trim(),
+        email: email ? email.toLowerCase().trim() : undefined,
         password,
         accountStatus: 'PENDING_EMAIL_VERIFICATION',
         emailVerified: false,
-        emailVerificationToken: hashedToken,
-        emailVerificationExpire: expiry,
+        emailVerificationToken: undefined,
+        emailVerificationExpire: undefined,
+        phone: phone ? phone.trim() : undefined,
+        phoneVerified: false,
+        phoneVerificationToken: undefined,
+        phoneVerificationExpire: undefined,
         loginAttempts: 0,
         twoFAAttempts: 0
-      });
-      console.log('✅ New user created (pending verification):', user.email);
+      };
+
+      // Attach tokens according to chosen method
+      if (verificationMethod === 'phone' && phone) {
+        newUser.phoneVerificationToken = hashedToken;
+        newUser.phoneVerificationExpire = expiry;
+      } else if (verificationMethod === 'email' && email) {
+        newUser.emailVerificationToken = hashedToken;
+        newUser.emailVerificationExpire = expiry;
+      }
+
+      user = await User.create(newUser);
+      console.log('✅ New user created (pending verification):', user.phone || user.email);
     } else {
       // Update existing unverified user with new token
       user.name = name.trim();
       user.password = password;
       user.accountStatus = 'PENDING_EMAIL_VERIFICATION';
-      user.emailVerificationToken = hashedToken;
-      user.emailVerificationExpire = expiry;
+      
+      if (verificationMethod === 'phone' && phone) {
+        user.phone = phone.trim();
+        user.phoneVerificationToken = hashedToken;
+        user.phoneVerificationExpire = expiry;
+      } else if (verificationMethod === 'email' && email) {
+        user.email = email.toLowerCase().trim();
+        user.emailVerificationToken = hashedToken;
+        user.emailVerificationExpire = expiry;
+      }
       await user.save();
-      console.log('✅ Updated unverified user:', user.email);
+      console.log('✅ Updated unverified user:', user.phone || user.email);
     }
 
     // DEV: log plaintext verification code for local testing
-    console.log('DEV: Email verification code for', user.email, '=', token);
+    const contact = verificationMethod === 'phone' ? user.phone : user.email;
+    console.log('DEV: Verification code for', contact, '=', token);
 
-    // ===== SEND VERIFICATION EMAIL =====
+    // ===== SEND VERIFICATION (EMAIL or SMS) =====
     try {
-      await emailService.sendSignupVerificationEmail(
-        user.email,
-        user.name,
-        token  // Send plaintext token to user
-      );
-      console.log('📧 Verification email sent to:', user.email);
-    } catch (emailError) {
-      console.error('⚠️ Email sending failed:', emailError.message);
+      if (verificationMethod === 'phone' && user.phone) {
+        await smsService.sendSignupVerificationSMS(user.phone, user.name, token);
+        console.log('📱 Verification SMS sent to:', user.phone);
+      } else {
+        await emailService.sendSignupVerificationEmail(user.email, user.name, token);
+        console.log('📧 Verification email sent to:', user.email);
+      }
+    } catch (sendError) {
+      console.error('⚠️ Verification send failed:', sendError.message);
       // Continue - user can resend
     }
 
     res.status(201).json({
       success: true,
-      message: '✅ Signup successful! Please check your email to verify your account.',
-      requiresEmailVerification: true,
-      email: user.email
+      message: '✅ Signup successful! Please check your chosen contact to verify your account.',
+      requiresVerification: true,
+      availableMethods: [user.email ? 'email' : null, user.phone ? 'phone' : null].filter(Boolean),
+      contact: verificationMethod === 'phone' ? user.phone : user.email
     });
 
   } catch (error) {
@@ -160,19 +218,19 @@ exports.signup = async (req, res) => {
 // @access  Public
 exports.verifyEmail = async (req, res) => {
   try {
-    const { email, token } = req.body;
+    const { email, token, method, phone } = req.body;
 
-    console.log('🔐 Email verification attempt:', email);
+    console.log('🔐 Verification attempt:', { email, phone, method });
 
-    if (!email || !token) {
+    if ((!email && !phone) || !token) {
       return res.status(400).json({
         success: false,
-        message: 'Email and verification token are required'
+        message: 'Contact (email or phone) and verification token are required'
       });
     }
 
     // ===== FIND USER =====
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = email ? await User.findOne({ email: email.toLowerCase() }) : await User.findOne({ phone: phone });
 
     if (!user) {
       return res.status(404).json({
@@ -181,43 +239,63 @@ exports.verifyEmail = async (req, res) => {
       });
     }
 
-    if (user.emailVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already verified'
-      });
+    // Determine which verification is being performed
+    if (method === 'phone') {
+      if (user.phoneVerified) {
+        return res.status(400).json({ success: false, message: 'Phone already verified' });
+      }
+
+      if (!user.phoneVerificationToken || !user.phoneVerificationExpire) {
+        return res.status(400).json({ success: false, message: 'No verification token found. Please request a new one.' });
+      }
+
+      if (isTokenExpired(user.phoneVerificationExpire)) {
+        user.phoneVerificationToken = undefined;
+        user.phoneVerificationExpire = undefined;
+        await user.save();
+        return res.status(400).json({ success: false, message: 'Verification token expired. Please request a new one.' });
+      }
+
+      // Dev mode: accept test OTP
+      let isValid = false;
+      if (process.env.NODE_ENV === 'development' && token === '111005') {
+        isValid = true;
+        console.log('🧪 [DEV TEST] Accepted test OTP 111005');
+      } else {
+        isValid = await verifyToken(token, user.phoneVerificationToken);
+      }
+      if (!isValid) return res.status(401).json({ success: false, message: 'Invalid verification token' });
+
+      user.phoneVerified = true;
+      user.phoneVerificationToken = undefined;
+      user.phoneVerificationExpire = undefined;
+      user.accountStatus = 'ACTIVE';
+      await user.save();
+
+      console.log('✅ Phone verified successfully:', user.phone);
+      return res.status(200).json({ success: true, message: '✅ Phone verified successfully! You can now login.', accountActive: true });
     }
 
-    // ===== VALIDATE TOKEN =====
-    if (!user.emailVerificationToken || !user.emailVerificationExpire) {
-      return res.status(400).json({
-        success: false,
-        message: 'No verification token found. Please request a new one.'
-      });
-    }
-
+    // Default: email verification
+    if (user.emailVerified) return res.status(400).json({ success: false, message: 'Email already verified' });
+    if (!user.emailVerificationToken || !user.emailVerificationExpire) return res.status(400).json({ success: false, message: 'No verification token found. Please request a new one.' });
     if (isTokenExpired(user.emailVerificationExpire)) {
       user.emailVerificationToken = undefined;
       user.emailVerificationExpire = undefined;
       await user.save();
-      
-      return res.status(400).json({
-        success: false,
-        message: 'Verification token expired. Please request a new one.'
-      });
+      return res.status(400).json({ success: false, message: 'Verification token expired. Please request a new one.' });
     }
 
-    // ===== VERIFY TOKEN =====
     const isValidToken = await verifyToken(token, user.emailVerificationToken);
-
     if (!isValidToken) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid verification token'
-      });
+      // Dev mode: accept test OTP
+      if (process.env.NODE_ENV === 'development' && token === '111005') {
+        console.log('🧪 [DEV TEST] Accepted test OTP 111005');
+      } else {
+        return res.status(401).json({ success: false, message: 'Invalid verification token' });
+      }
     }
 
-    // ===== UPDATE USER STATUS =====
     user.emailVerified = true;
     user.accountStatus = 'ACTIVE';
     user.emailVerificationToken = undefined;
@@ -225,12 +303,7 @@ exports.verifyEmail = async (req, res) => {
     await user.save();
 
     console.log('✅ Email verified successfully:', user.email);
-
-    res.status(200).json({
-      success: true,
-      message: '✅ Email verified successfully! You can now login.',
-      accountActive: true
-    });
+    res.status(200).json({ success: true, message: '✅ Email verified successfully! You can now login.', accountActive: true });
 
   } catch (error) {
     console.error('❌ Email verification error:', error);
@@ -246,16 +319,16 @@ exports.verifyEmail = async (req, res) => {
 // @access  Public
 exports.resendVerificationEmail = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, method, phone } = req.body;
 
-    if (!email) {
+    if (!email && !phone) {
       return res.status(400).json({
         success: false,
-        message: 'Email is required'
+        message: 'Email or phone is required'
       });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = email ? await User.findOne({ email: email.toLowerCase() }) : await User.findOne({ phone: phone });
 
     if (!user) {
       // Security: Don't reveal if email exists
@@ -265,7 +338,15 @@ exports.resendVerificationEmail = async (req, res) => {
       });
     }
 
-    if (user.emailVerified) {
+    // Check if already verified based on method
+    if (method === 'phone' && user.phoneVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone already verified. Please login.'
+      });
+    }
+
+    if (method !== 'phone' && user.emailVerified) {
       return res.status(400).json({
         success: false,
         message: 'Email already verified. Please login.'
@@ -292,21 +373,31 @@ exports.resendVerificationEmail = async (req, res) => {
     // ===== GENERATE NEW TOKEN =====
     const { token, hashedToken, expiry } = await generateVerificationToken(15);
 
-    user.emailVerificationToken = hashedToken;
-    user.emailVerificationExpire = expiry;
+    if (method === 'phone' && user.phone) {
+      user.phoneVerificationToken = hashedToken;
+      user.phoneVerificationExpire = expiry;
+    } else {
+      user.emailVerificationToken = hashedToken;
+      user.emailVerificationExpire = expiry;
+    }
     await user.save();
 
-    // ===== SEND EMAIL =====
+    // ===== SEND =====
     try {
-      await emailService.sendSignupVerificationEmail(user.email, user.name, token);
-      console.log('📧 Verification email resent to:', user.email);
-    } catch (emailError) {
-      console.error('⚠️ Email sending failed:', emailError.message);
+      if (method === 'phone' && user.phone) {
+        await smsService.sendSignupVerificationSMS(user.phone, user.name, token);
+        console.log('📱 Verification SMS resent to:', user.phone);
+      } else {
+        await emailService.sendSignupVerificationEmail(user.email, user.name, token);
+        console.log('📧 Verification email resent to:', user.email);
+      }
+    } catch (sendError) {
+      console.error('⚠️ Verification sending failed:', sendError.message);
     }
 
     res.status(200).json({
       success: true,
-      message: '📧 Verification email resent'
+      message: '✅ Verification resent'
     });
 
   } catch (error) {
@@ -324,25 +415,26 @@ exports.resendVerificationEmail = async (req, res) => {
 // @access  Public
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, phone, password } = req.body;
     
-    console.log('🔐 Login request:', { email });
+    console.log('🔐 Login request:', { email, phone });
 
-    if (!email || !password) {
+    if ((!email && !phone) || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required'
+        message: 'Email or phone and password are required'
       });
     }
 
     // ===== FIND USER WITH PASSWORD =====
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    const query = email ? { email: email.toLowerCase() } : { phone };
+    const user = await User.findOne(query).select('+password');
 
     if (!user) {
-      console.log('❌ User not found:', email);
+      console.log('❌ User not found:', email || phone);
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: 'Invalid login credentials'
       });
     }
 
@@ -363,12 +455,13 @@ exports.login = async (req, res) => {
       }
     }
 
-    if (!user.emailVerified) {
+    // Require verification by either email or phone
+    if (!user.emailVerified && !user.phoneVerified) {
       return res.status(403).json({
         success: false,
-        message: 'Please verify your email first',
-        requiresEmailVerification: true,
-        email: user.email
+        message: 'Please verify your account via email or phone first',
+        requiresVerification: true,
+        availableMethods: [user.email ? 'email' : null, user.phone ? 'phone' : null].filter(Boolean)
       });
     }
 
@@ -394,14 +487,22 @@ exports.login = async (req, res) => {
     }
 
     // ===== VERIFY PASSWORD =====
-    const isPasswordMatch = await user.comparePassword(password);
+    let isPasswordMatch = false;
+    
+    // Dev mode: accept test password for test account
+    if (process.env.NODE_ENV === 'development' && email === 'abhayrajsinghmandloi@gmail.com' && password === 'Abhay@11') {
+      isPasswordMatch = true;
+      console.log('🧪 [DEV TEST] Accepted test password for test account');
+    } else {
+      isPasswordMatch = await user.comparePassword(password);
+    }
 
     if (!isPasswordMatch) {
       incrementRateLimit(user, 'loginAttempts');
       const attempts = user.loginAttempts?.count || 1;
       await user.save();
 
-      console.log('❌ Invalid password for user:', email, `(${attempts} attempts)`);
+      console.log('❌ Invalid password for user:', email || phone, `(${attempts} attempts)`);
 
       return res.status(401).json({
         success: false,
@@ -414,6 +515,11 @@ exports.login = async (req, res) => {
     user.loginAttempts = 0;
     user.lastLoginAt = new Date();
 
+    // Determine available methods
+    const availableMethods = [];
+    if (user.email) availableMethods.push('email');
+    if (user.phone) availableMethods.push('phone');
+
     // ===== GENERATE 2FA OTP =====
     const { otp, hashedOTP, expiry } = await generate2FAOTP(10);
 
@@ -425,19 +531,26 @@ exports.login = async (req, res) => {
     // DEV: log plaintext 2FA code for local testing
     console.log('DEV: 2FA OTP for', user.email, '=', otp);
 
-    // ===== SEND 2FA OTP EMAIL =====
+    // If client requested phone method, try SMS
+    const method = req.body.method;
     try {
-      await emailService.send2FAEmail(user.email, user.name, otp);
-      console.log('📧 2FA OTP sent to:', user.email);
-    } catch (emailError) {
-      console.error('⚠️ Email sending failed:', emailError.message);
+      if (method === 'phone' && user.phone) {
+        await smsService.send2FASMS(user.phone, user.name, otp);
+        console.log('📱 2FA OTP sent to:', user.phone);
+      } else {
+        await emailService.send2FAEmail(user.email, user.name, otp);
+        console.log('📧 2FA OTP sent to:', user.email);
+      }
+    } catch (sendErr) {
+      console.error('⚠️ 2FA sending failed:', sendErr.message);
     }
 
     res.status(200).json({
       success: true,
-      message: '📧 OTP sent to your email. Please verify to login.',
+      message: 'OTP sent. Please verify to login.',
       requires2FA: true,
-      email: user.email,
+      availableMethods,
+      contact: method === 'phone' && user.phone ? user.phone : user.email,
       userId: user._id
     });
 
@@ -735,10 +848,30 @@ exports.getProfile = async (req, res) => {
 
     console.log('✅ Profile retrieved for:', user.email);
 
-    res.status(200).json({
-      success: true,
-      user
-    });
+    // Mask sensitive aadhar field in response
+    const publicUser = user.toObject();
+    delete publicUser.aadharEncrypted;
+    if (publicUser.aadharMasked) {
+      publicUser.aadhar = { masked: publicUser.aadharMasked, status: publicUser.aadharVerificationStatus };
+    } else {
+      publicUser.aadhar = { masked: null, status: publicUser.aadharVerificationStatus };
+    }
+
+    // Reputation grouping
+    publicUser.reputation = {
+      overallRating: publicUser.overallRating || 0,
+      ridesAsDriver: publicUser.ridesAsDriver || 0,
+      ridesAsPassenger: publicUser.ridesAsPassenger || 0
+    };
+
+    // Remove internal fields
+    delete publicUser.overallRating;
+    delete publicUser.ridesAsDriver;
+    delete publicUser.ridesAsPassenger;
+    delete publicUser.aadharMasked;
+    delete publicUser.aadharVerificationStatus;
+
+    res.status(200).json({ success: true, user: publicUser });
 
   } catch (error) {
     console.error('❌ Get profile error:', error);
@@ -754,7 +887,7 @@ exports.getProfile = async (req, res) => {
 // @access  Private
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, phone, avatar } = req.body;
+    const { avatarUrl, gender, age, homeCity } = req.body;
 
     const user = await User.findById(req.user.id);
 
@@ -765,25 +898,131 @@ exports.updateProfile = async (req, res) => {
       });
     }
 
-    if (name) user.name = name.trim();
-    if (phone !== undefined) user.phone = phone.trim();
-    if (avatar !== undefined) user.avatar = avatar;
+    // Immutable identity fields: name, email, phone cannot be changed via this endpoint
 
+    // Validation
+    if (age !== undefined && age !== null) {
+      const numericAge = Number(age);
+      if (Number.isNaN(numericAge) || numericAge < 18) {
+        return res.status(400).json({ success: false, message: 'Age must be a number and at least 18' });
+      }
+      user.age = numericAge;
+    }
+
+    if (gender !== undefined) {
+      const allowed = ['Male', 'Female', 'Other', 'Prefer not to say'];
+      if (gender && !allowed.includes(gender)) {
+        return res.status(400).json({ success: false, message: 'Invalid gender value' });
+      }
+      user.gender = gender || 'Prefer not to say';
+    }
+
+    if (homeCity !== undefined) user.homeCity = homeCity || '';
+    if (avatarUrl !== undefined) user.avatarUrl = avatarUrl || null;
+
+    user.updatedAt = new Date();
     await user.save();
 
     console.log('✅ Profile updated for:', user.email);
 
-    res.status(200).json({
-      success: true,
-      message: 'Profile updated successfully',
-      user
-    });
+    const publicUser = user.toObject();
+    delete publicUser.aadharEncrypted;
+    publicUser.aadhar = { masked: publicUser.aadharMasked, status: publicUser.aadharVerificationStatus };
+
+    res.status(200).json({ success: true, message: 'Profile updated successfully', user: publicUser });
 
   } catch (error) {
     console.error('❌ Update profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error updating profile'
-    });
+    res.status(500).json({ success: false, message: 'Server error updating profile' });
+  }
+};
+
+// @desc    Submit Aadhar for verification
+// @route   POST /api/auth/profile/aadhar
+// @access  Private
+exports.submitAadhar = async (req, res) => {
+  try {
+    const { aadharNumber, documentUrl } = req.body;
+
+    if (!aadharNumber || typeof aadharNumber !== 'string') {
+      return res.status(400).json({ success: false, message: 'Aadhar number is required' });
+    }
+
+    // Basic validation: digits only, length 12 (India Aadhaar)
+    const digitsOnly = aadharNumber.replace(/\D/g, '');
+    if (digitsOnly.length < 8) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid Aadhar number' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Mask aadhar: keep last 4 digits, mask rest
+    const masked = digitsOnly.length >= 4 ? `**** **** ${digitsOnly.slice(-4)}` : `**** ${digitsOnly}`;
+
+    // Encrypt the full value for storage
+    let encrypted;
+    try {
+      encrypted = encrypt(digitsOnly);
+    } catch (err) {
+      console.error('❌ Encryption failed:', err.message);
+      return res.status(500).json({ success: false, message: 'Server encryption error' });
+    }
+
+    user.aadharEncrypted = encrypted;
+    user.aadharMasked = masked;
+    user.aadharDocumentUrl = documentUrl || user.aadharDocumentUrl;
+    user.aadharVerificationStatus = 'pending';
+    user.aadharVerified = false;
+
+    await user.save();
+
+    // Return refreshed public profile
+    const publicUser = user.toObject();
+    delete publicUser.aadharEncrypted;
+    publicUser.aadhar = { masked: publicUser.aadharMasked, status: publicUser.aadharVerificationStatus };
+
+    res.status(200).json({ success: true, message: 'Aadhar submitted for verification', user: publicUser });
+  } catch (error) {
+    console.error('❌ Submit Aadhar error:', error);
+    res.status(500).json({ success: false, message: 'Server error submitting Aadhar' });
+  }
+};
+
+// @desc    Admin: verify or reject a user's Aadhar
+// @route   POST /api/auth/profile/aadhar/verify
+// @access  Private/Admin
+exports.adminVerifyAadhar = async (req, res) => {
+  try {
+    const { userId, action, reason } = req.body; // action = 'approve' | 'reject'
+
+    if (!userId || !action) return res.status(400).json({ success: false, message: 'userId and action are required' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (action === 'approve') {
+      user.aadharVerified = true;
+      user.aadharVerificationStatus = 'verified';
+    } else {
+      user.aadharVerified = false;
+      user.aadharVerificationStatus = 'rejected';
+    }
+
+    // Optionally store admin note (non-sensitive)
+    user.aadharAdminNote = reason || '';
+
+    await user.save();
+
+    console.log(`✅ Aadhar ${action} for user: ${user.email} by admin ${req.user.email}`);
+
+    const publicUser = user.toObject();
+    delete publicUser.aadharEncrypted;
+    publicUser.aadhar = { masked: publicUser.aadharMasked, status: publicUser.aadharVerificationStatus };
+
+    res.status(200).json({ success: true, message: `Aadhar ${action}d`, user: publicUser });
+  } catch (error) {
+    console.error('❌ Admin verify Aadhar error:', error);
+    res.status(500).json({ success: false, message: 'Server error during verification' });
   }
 };

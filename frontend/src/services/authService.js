@@ -16,9 +16,12 @@ export const signupUser = async (userData) => {
  * @param {string} otp
  * @returns {Promise<Object>} - {success, message}
  */
-export const verifyEmail = async (email, token) => {
-  // backend expects { email, token }
-  const response = await api.post('/auth/verify-email', { email, token });
+export const verifyEmail = async (email, token, method = 'email', phone = '') => {
+  // backend expects { email|phone, token, method }
+  const payload = { token, method };
+  if (email) payload.email = email;
+  if (phone) payload.phone = phone;
+  const response = await api.post('/auth/verify-email', payload);
   return response.data;
 };
 
@@ -27,9 +30,13 @@ export const verifyEmail = async (email, token) => {
  * @param {string} email
  * @returns {Promise<Object>} - {success, message}
  */
-export const resendOTP = async (email) => {
+export const resendOTP = async (email, method = 'email', phone = '') => {
   // endpoint renamed to resend-verification on backend
-  const response = await api.post('/auth/resend-verification', { email });
+  const payload = {};
+  if (email) payload.email = email;
+  if (phone) payload.phone = phone;
+  payload.method = method;
+  const response = await api.post('/auth/resend-verification', payload);
   return response.data;
 };
 
@@ -80,6 +87,15 @@ export const resetPassword = async (data) => {
  */
 export const getProfile = async () => {
   const response = await api.get('/auth/profile');
+  return response.data;
+};
+
+/**
+ * Submit Aadhar for verification
+ * @param {Object} data - { aadharNumber, documentUrl }
+ */
+export const submitAadhar = async (data) => {
+  const response = await api.post('/auth/profile/aadhar', data);
   return response.data;
 };
 

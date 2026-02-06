@@ -57,6 +57,8 @@ api.interceptors.request.use(
   }
 );
 
+import { error as toastError } from '../utils/toast';
+
 // Response interceptor - Handle errors globally
 api.interceptors.response.use(
   (response) => {
@@ -101,6 +103,11 @@ api.interceptors.response.use(
         }
       }
     } else if (error.response?.status === 403) {
+      // If it's the Aadhar-required block, show exact toast message
+      const msg = error.response?.data?.message || '';
+      if (msg === 'Please verify Aadhar') {
+        try { toastError(msg); } catch (e) { console.warn('Toast failed', e); }
+      }
       console.error('🚫 Forbidden - insufficient permissions');
     } else if (error.response?.status === 404) {
       console.error('🔍 Not found - endpoint does not exist');

@@ -12,10 +12,11 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
+    required: false,
     unique: true,
     lowercase: true,
     trim: true,
+    sparse: true,
     match: [
       /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
       'Please provide a valid email'
@@ -34,9 +35,12 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    trim: true
+    trim: true,
+    required: false,
+    unique: true,
+    sparse: true
   },
-  avatar: {
+  avatarUrl: {
     type: String,
     default: null
   },
@@ -47,6 +51,67 @@ const userSchema = new mongoose.Schema({
   },
   emailVerificationToken: String,    // Hashed token
   emailVerificationExpire: Date,
+  // Phone verification
+  // (phone defined above)
+  phoneVerified: {
+    type: Boolean,
+    default: false
+  },
+  phoneVerificationToken: String,
+  phoneVerificationExpire: Date,
+  // Editable profile fields
+  gender: {
+    type: String,
+    enum: ['Male', 'Female', 'Other', 'Prefer not to say'],
+    default: 'Prefer not to say'
+  },
+  age: {
+    type: Number,
+    min: 18
+  },
+  homeCity: {
+    type: String,
+    default: ''
+  },
+
+  // Reputation (system-controlled)
+  overallRating: {
+    type: Number,
+    default: 0
+  },
+  ridesAsDriver: {
+    type: Number,
+    default: 0
+  },
+  ridesAsPassenger: {
+    type: Number,
+    default: 0
+  },
+
+  // Aadhar / identity verification (sensitive)
+  aadharVerified: {
+    type: Boolean,
+    default: false
+  },
+  aadharEncrypted: {
+    type: String
+  },
+  aadharDocumentUrl: {
+    type: String,
+    default: null
+  },
+  aadharMasked: {
+    type: String
+  },
+  aadharVerificationStatus: {
+    type: String,
+    enum: ['pending', 'verified', 'rejected'],
+    default: 'pending'
+  },
+  aadharAdminNote: {
+    type: String,
+    default: ''
+  },
   
   // ========== PASSWORD RESET ==========
   passwordResetToken: String,        // Hashed token

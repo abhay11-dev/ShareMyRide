@@ -9,9 +9,11 @@ function Signup() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: ''
   });
+  const [verificationMethod, setVerificationMethod] = useState('email');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -62,12 +64,20 @@ function Signup() {
       const result = await signupUser({
         name: formData.name,
         email: formData.email,
+        phone: formData.phone,
+        verificationMethod,
         password: formData.password,
         confirmPassword: formData.confirmPassword
       });
 
-      success(`📧 Verification email sent to ${formData.email}`);
-      info('Please check your inbox and verify your email');
+      if (verificationMethod === 'phone') {
+        success(`📱 Verification SMS sent to ${formData.phone || 'your phone'}`);
+        info('Please check your phone and verify the code');
+      } else {
+        success(`📧 Verification email sent to ${formData.email || 'your email'}`);
+        info('Please check your inbox and verify your email');
+      }
+
       setStep('verify');
       setOtp('');
       setError('');
@@ -94,10 +104,14 @@ function Signup() {
     setLoading(true);
     
     try {
-      await verifyEmail(formData.email, otp);
-      success('✅ Email verified successfully!');
-      info('You can now proceed to login');
-      setStep('success');
+        await verifyEmail(formData.email, otp, verificationMethod, formData.phone);
+        if (verificationMethod === 'phone') {
+          success('✅ Phone verified successfully!');
+        } else {
+          success('✅ Email verified successfully!');
+        }
+        info('You can now proceed to login');
+        setStep('success');
       
       // Redirect to login after 2 seconds
       setTimeout(() => {
@@ -119,8 +133,12 @@ function Signup() {
     setLoading(true);
 
     try {
-      await resendOTP(formData.email);
-      success('📧 OTP resent to your email');
+      await resendOTP(formData.email, verificationMethod, formData.phone);
+      if (verificationMethod === 'phone') {
+        success('📱 OTP resent to your phone');
+      } else {
+        success('📧 OTP resent to your email');
+      }
       setResendTimer(60);
       
       // Countdown timer
@@ -168,7 +186,32 @@ function Signup() {
 
             <div className="mb-4 sm:mb-5">
               <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
-              <input type="email" placeholder="you@example.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full border border-gray-300 pl-4 pr-4 py-2.5 sm:py-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-sm sm:text-base" required disabled={loading} />
+              <input type="email" placeholder="you@example.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full border border-gray-300 pl-4 pr-4 py-2.5 sm:py-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-sm sm:text-base" required={verificationMethod === 'email'} disabled={loading} />
+              {verificationMethod !== 'email' && (
+                <p className="text-xs text-gray-500 mt-1">Optional when verifying via phone</p>
+              )}
+            </div>
+
+            <div className="mb-4 sm:mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Phone {verificationMethod === 'phone' ? '' : '(optional for SMS verification)'}</label>
+              <input type="tel" placeholder="+911234567890" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full border border-gray-300 pl-4 pr-4 py-2.5 sm:py-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-sm sm:text-base" required={verificationMethod === 'phone'} disabled={loading} />
+              {verificationMethod !== 'phone' && (
+                <p className="text-xs text-gray-500 mt-1">Optional when verifying via email</p>
+              )}
+            </div>
+
+            <div className="mb-4 sm:mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Verify via</label>
+              <div className="flex gap-4 items-center">
+                <label className="inline-flex items-center text-sm">
+                  <input type="radio" name="verify" value="email" checked={verificationMethod === 'email'} onChange={() => setVerificationMethod('email')} className="mr-2" />
+                  Email
+                </label>
+                <label className="inline-flex items-center text-sm">
+                  <input type="radio" name="verify" value="phone" checked={verificationMethod === 'phone'} onChange={() => setVerificationMethod('phone')} className="mr-2" />
+                  SMS
+                </label>
+              </div>
             </div>
 
             <div className="mb-4 sm:mb-5">
@@ -216,8 +259,8 @@ function Signup() {
               <div className="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-full mb-4">
                 <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Verify Email</h2>
-              <p className="text-gray-600 text-xs sm:text-sm">We sent a code to {formData.email}</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Verify {verificationMethod === 'phone' ? 'Phone' : 'Email'}</h2>
+              <p className="text-gray-600 text-xs sm:text-sm">We sent a code to {verificationMethod === 'phone' ? formData.phone || '(your phone)' : formData.email || '(your email)'}</p>
             </div>
 
             {error && (
@@ -233,7 +276,7 @@ function Signup() {
             </div>
 
             <button type="submit" disabled={loading || otp.length !== 6} className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-semibold py-2.5 sm:py-3 px-4 rounded-lg transition-all duration-200">
-              {loading ? 'Verifying...' : 'Verify Email'}
+              {loading ? 'Verifying...' : `Verify ${verificationMethod === 'phone' ? 'Phone' : 'Email'}` }
             </button>
 
             <div className="text-center mt-5 sm:mt-6">
@@ -258,7 +301,7 @@ function Signup() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
               <svg className="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Email Verified!</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">{verificationMethod === 'phone' ? 'Phone Verified!' : 'Email Verified!'}</h2>
             <p className="text-gray-600 text-sm mb-6">Your account is ready. Redirecting to login...</p>
           </div>
         )}

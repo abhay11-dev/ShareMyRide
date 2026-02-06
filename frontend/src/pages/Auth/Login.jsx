@@ -8,10 +8,13 @@ function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [step, setStep] = useState('login'); // login or 2fa
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState(''); // email or phone depending on chosen identifierType
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [userId, setUserId] = useState('');
+  const [identifierType, setIdentifierType] = useState('email'); // 'email' or 'phone' for the login identifier
+  const [deliveryMethod, setDeliveryMethod] = useState('email');
+  const [availableMethods, setAvailableMethods] = useState(['email']);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -23,16 +26,23 @@ function Login() {
     setLoading(true);
     
     try {
-      const result = await loginUser({ email, password });
+      // Build payload with either email or phone
+      const payload = { password, method: deliveryMethod };
+      if (identifierType === 'email') payload.email = identifier;
+      else payload.phone = identifier;
+
+      const result = await loginUser(payload);
+      setAvailableMethods(result.availableMethods || ['email']);
       
       if (result.requires2FA) {
-        info('📧 2FA code sent to your email');
+        const contact = result.contact || identifier;
+        info(`📧 2FA code sent to ${contact}`);
         setStep('2fa');
         setUserId(result.userId);
         setOtp('');
-      } else if (result.requiresEmailVerification) {
-        showError('Please verify your email first');
-        navigate('/verify-email', { state: { email } });
+      } else if (result.requiresVerification) {
+        showError('Please verify your account first');
+        navigate('/verify-email', { state: { email: identifier, method: identifierType } });
       }
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.message || 'Login failed';
@@ -59,7 +69,7 @@ function Login() {
       const result = await verify2FA(userId, otp);
       
       if (result.token && result.user) {
-        // Store in localStorage instead of calling login function
+        // Store in localStorage
         localStorage.setItem('token', result.token);
         localStorage.setItem('user', JSON.stringify(result.user));
         
@@ -67,10 +77,13 @@ function Login() {
         const username = result.user.name || result.user.email;
         success(`👋 Welcome ${username}!`);
         
+        // Dispatch custom event to notify context to update
+        window.dispatchEvent(new Event('userLoggedIn'));
+        
         // Navigate to home/dashboard
         setTimeout(() => {
           navigate('/');
-        }, 1500);
+        }, 1000);
       }
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.message || 'Verification failed';
@@ -86,8 +99,13 @@ function Login() {
     setLoading(true);
     
     try {
-      await loginUser({ email, password });
-      success('📧 2FA code resent to your email');
+      // Build payload
+      const payload = { password, method: deliveryMethod };
+      if (identifierType === 'email') payload.email = identifier;
+      else payload.phone = identifier;
+
+      await loginUser(payload);
+      success(`📧 2FA code resent to your ${identifierType}`);
       setResendTimer(60);
       setOtp('');
       
@@ -130,8 +148,40 @@ function Login() {
             )}
 
             <div className="mb-4 sm:mb-5">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
-              <input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border border-gray-300 pl-4 pr-4 py-2.5 sm:py-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm sm:text-base" required disabled={loading} autoComplete="email" />
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Login with</label>
+              <div className="flex gap-4 items-center">
+                <label className="inline-flex items-center text-sm">
+                  <input type="radio" name="identifier" value="email" checked={identifierType === 'email'} onChange={() => setIdentifierType('email')} className="mr-2" />
+                  Email
+                </label>
+                <label className="inline-flex items-center text-sm">
+                  <input type="radio" name="identifier" value="phone" checked={identifierType === 'phone'} onChange={() => setIdentifierType('phone')} className="mr-2" />
+                  Phone
+                </label>
+              </div>
+            </div>
+
+            <div className="mb-4 sm:mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">{identifierType === 'email' ? 'Email Address' : 'Phone Number'}</label>
+              {identifierType === 'email' ? (
+                <input type="email" placeholder="you@example.com" value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full border border-gray-300 pl-4 pr-4 py-2.5 sm:py-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm sm:text-base" required disabled={loading} autoComplete="email" />
+              ) : (
+                <input type="tel" placeholder="+911234567890" value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full border border-gray-300 pl-4 pr-4 py-2.5 sm:py-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm sm:text-base" required disabled={loading} autoComplete="tel" />
+              )}
+            </div>
+
+            <div className="mb-4 sm:mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Preferred 2FA Method</label>
+              <div className="flex gap-4 items-center">
+                <label className="inline-flex items-center text-sm">
+                  <input type="radio" name="delivery" value="email" checked={deliveryMethod === 'email'} onChange={() => setDeliveryMethod('email')} className="mr-2" />
+                  Email
+                </label>
+                <label className="inline-flex items-center text-sm">
+                  <input type="radio" name="delivery" value="phone" checked={deliveryMethod === 'phone'} onChange={() => setDeliveryMethod('phone')} className="mr-2" />
+                  SMS
+                </label>
+              </div>
             </div>
 
             <div className="mb-5 sm:mb-6">
