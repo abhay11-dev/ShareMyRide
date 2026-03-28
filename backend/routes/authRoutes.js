@@ -1,22 +1,37 @@
-// backend/routes/authRoutes.js (Final Corrected Code)
+// backend/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
 
-// Destructure the controller functions
-const { signup, login, getProfile } = require('../controllers/authController');
+const {
+  signup,
+  verifyEmail,
+  resendVerificationEmail,
+  login,
+  verify2FA,
+  forgotPassword,
+  resetPassword,
+  getProfile,
+  updateProfile,
+  submitAadhar,
+  adminVerifyAadhar
+} = require('../controllers/authController');
 
-// 🛑 FIX: Import 'protect' using destructuring, as it's the function you need.
-// We assume '../middleware/auth' exports { protect, authorize }
-const { protect } = require('../middleware/auth'); 
+const { protect, authorize } = require('../middleware/auth');
 
-// POST /api/auth/signup
+// Public Routes
 router.post('/signup', signup);
-
-// POST /api/auth/login
+router.post('/verify-email', verifyEmail);
+router.post('/resend-verification', resendVerificationEmail);
 router.post('/login', login);
+router.post('/verify-2fa', verify2FA);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 
-// GET /api/auth/profile
-// ✅ Use 'protect' (which is now the function) as the middleware
-router.get('/profile', protect, getProfile); 
+// Protected Routes
+router.get('/profile', protect, getProfile);
+router.put('/profile', protect, updateProfile);
+// Aadhar endpoints
+router.post('/profile/aadhar', protect, submitAadhar);
+router.post('/profile/aadhar/verify', protect, authorize('admin'), adminVerifyAadhar);
 
 module.exports = router;

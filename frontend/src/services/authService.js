@@ -1,28 +1,83 @@
 import api from '../config/api';
 
 /**
- * Signup user
+ * Signup user (Step 1: Create account & send verification OTP)
  * @param {Object} userData - {name, email, password}
- * @returns {Promise<Object>} - {token, user}
+ * @returns {Promise<Object>} - {email, requiresVerification}
  */
 export const signupUser = async (userData) => {
   const response = await api.post('/auth/signup', userData);
-  
-  // ✅ RETURN THE COMPLETE RESPONSE (includes token + user)
-  // UserContext will handle saving to localStorage
   return response.data;
 };
 
 /**
- * Login user
+ * Verify email with OTP (Step 2: Verify and then ready to login)
+ * @param {string} email
+ * @param {string} otp
+ * @returns {Promise<Object>} - {success, message}
+ */
+export const verifyEmail = async (email, token, method = 'email', phone = '') => {
+  // backend expects { email|phone, token, method }
+  const payload = { token, method };
+  if (email) payload.email = email;
+  if (phone) payload.phone = phone;
+  const response = await api.post('/auth/verify-email', payload);
+  return response.data;
+};
+
+/**
+ * Resend OTP
+ * @param {string} email
+ * @returns {Promise<Object>} - {success, message}
+ */
+export const resendOTP = async (email, method = 'email', phone = '') => {
+  // endpoint renamed to resend-verification on backend
+  const payload = {};
+  if (email) payload.email = email;
+  if (phone) payload.phone = phone;
+  payload.method = method;
+  const response = await api.post('/auth/resend-verification', payload);
+  return response.data;
+};
+
+/**
+ * Login user - Triggers 2FA
  * @param {Object} credentials - {email, password}
- * @returns {Promise<Object>} - {token, user}
+ * @returns {Promise<Object>} - {requires2FA, email, userId, message}
  */
 export const loginUser = async (credentials) => {
   const response = await api.post('/auth/login', credentials);
-  
-  // ✅ RETURN THE COMPLETE RESPONSE (includes token + user)
-  // UserContext will handle saving to localStorage
+  return response.data;
+};
+
+/**
+ * Verify 2FA OTP
+ * @param {string} userId
+ * @param {string} otp
+ * @returns {Promise<Object>} - {token, user}
+ */
+export const verify2FA = async (userId, otp) => {
+  const response = await api.post('/auth/verify-2fa', { userId, otp });
+  return response.data;
+};
+
+/**
+ * Forgot password - Request OTP
+ * @param {string} email
+ * @returns {Promise<Object>} - {success, message}
+ */
+export const forgotPassword = async (email) => {
+  const response = await api.post('/auth/forgot-password', { email });
+  return response.data;
+};
+
+/**
+ * Reset password with OTP
+ * @param {Object} data - {email, otp, newPassword, confirmPassword}
+ * @returns {Promise<Object>} - {success, message}
+ */
+export const resetPassword = async (data) => {
+  const response = await api.post('/auth/reset-password', data);
   return response.data;
 };
 
@@ -36,10 +91,19 @@ export const getProfile = async () => {
 };
 
 /**
+ * Submit Aadhar for verification
+ * @param {Object} data - { aadharNumber, documentUrl }
+ */
+export const submitAadhar = async (data) => {
+  const response = await api.post('/auth/profile/aadhar', data);
+  return response.data;
+};
+
+/**
  * Logout user (client-side cleanup)
  */
 export const logout = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
-  localStorage.removeItem('authToken'); // Remove old key if exists
+  localStorage.removeItem('authToken');
 };

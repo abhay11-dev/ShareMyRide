@@ -12,10 +12,11 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
+    required: false,
     unique: true,
     lowercase: true,
     trim: true,
+    sparse: true,
     match: [
       /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
       'Please provide a valid email'
@@ -34,18 +35,127 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    trim: true
+    trim: true,
+    required: false,
+    unique: true,
+    sparse: true
   },
-  avatar: {
+  avatarUrl: {
     type: String,
     default: null
   },
-  isVerified: {
+  // ========== EMAIL VERIFICATION ==========
+  emailVerified: {
     type: Boolean,
     default: false
   },
-  resetPasswordToken: String,
-  resetPasswordExpire: Date,
+  emailVerificationToken: String,    // Hashed token
+  emailVerificationExpire: Date,
+  // Phone verification
+  // (phone defined above)
+  phoneVerified: {
+    type: Boolean,
+    default: false
+  },
+  phoneVerificationToken: String,
+  phoneVerificationExpire: Date,
+  // Editable profile fields
+  gender: {
+    type: String,
+    enum: ['Male', 'Female', 'Other', 'Prefer not to say'],
+    default: 'Prefer not to say'
+  },
+  age: {
+    type: Number,
+    min: 18
+  },
+  homeCity: {
+    type: String,
+    default: ''
+  },
+
+  // Reputation (system-controlled)
+  overallRating: {
+    type: Number,
+    default: 0
+  },
+  ridesAsDriver: {
+    type: Number,
+    default: 0
+  },
+  ridesAsPassenger: {
+    type: Number,
+    default: 0
+  },
+
+  // Aadhar / identity verification (sensitive)
+  aadharVerified: {
+    type: Boolean,
+    default: false
+  },
+  aadharEncrypted: {
+    type: String
+  },
+  aadharDocumentUrl: {
+    type: String,
+    default: null
+  },
+  aadharMasked: {
+    type: String
+  },
+  aadharVerificationStatus: {
+    type: String,
+    enum: ['pending', 'verified', 'rejected'],
+    default: 'pending'
+  },
+  aadharAdminNote: {
+    type: String,
+    default: ''
+  },
+  
+  // ========== PASSWORD RESET ==========
+  passwordResetToken: String,        // Hashed token
+  passwordResetExpire: Date,
+  
+  // ========== 2FA SETUP ==========
+  twoFAEnabled: {
+    type: Boolean,
+    default: false
+  },
+  twoFASecret: String,               // For TOTP (future: authenticator app)
+  
+  // ========== 2FA LOGIN FLOW ==========
+  twoFAOTP: String,                  // Hashed OTP
+  twoFAOTPExpire: Date,
+  twoFAAttempts: {
+    type: Number,
+    default: 0
+  },
+  twoFALocked: {
+    type: Boolean,
+    default: false
+  },
+  twoFALockedUntil: Date,
+  
+  // ========== LOGIN SECURITY ==========
+  loginAttempts: {
+    type: Number,
+    default: 0
+  },
+  loginLocked: {
+    type: Boolean,
+    default: false
+  },
+  loginLockedUntil: Date,
+  lastLoginAt: Date,
+  
+  // ========== ACCOUNT STATUS ==========
+  accountStatus: {
+    type: String,
+    enum: ['PENDING_EMAIL_VERIFICATION', 'ACTIVE', 'LOCKED', 'SUSPENDED'],
+    default: 'PENDING_EMAIL_VERIFICATION'
+  },
+  
   createdAt: {
     type: Date,
     default: Date.now
@@ -91,8 +201,13 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 userSchema.methods.toJSON = function() {
   const user = this.toObject();
   delete user.password;
-  delete user.resetPasswordToken;
-  delete user.resetPasswordExpire;
+  delete user.passwordResetToken;
+  delete user.passwordResetExpire;
+  delete user.emailVerificationToken;
+  delete user.emailVerificationExpire;
+  delete user.twoFAOTP;
+  delete user.twoFAOTPExpire;
+  delete user.twoFASecret;
   delete user.__v;
   return user;
 };

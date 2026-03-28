@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Home from '../pages/Home/Home';
 import Login from '../pages/Auth/Login';
 import Signup from '../pages/Auth/Signup';
+import ForgotPassword from '../pages/Auth/ForgotPassword';
 import RideSearch from '../pages/RideSearch/RideSearch';
 import RidePost from '../pages/RidePost/RidePost';
 import Profile from '../pages/Profile/Profile.jsx';
@@ -78,7 +79,17 @@ function AppRoutes() {
 
 
       <Route path="/upcoming-rides" element={<UpcomingRides />} />
-<Route path="/driver/upcoming-rides" element={<DriverUpcomingRides />} />
+      <Route path="/driver/upcoming-rides" element={<DriverUpcomingRides />} />
+      
+      {/* Auth Routes */}
+      <Route 
+        path="/forgot-password" 
+        element={
+          <PublicRoute>
+            <ForgotPassword />
+          </PublicRoute>
+        } 
+      />
       
       {/* Protected Routes - Require authentication */}
       <Route 
